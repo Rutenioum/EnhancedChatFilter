@@ -1,12 +1,12 @@
--- ECF
+﻿-- ECF
 local addonName, ecf = ...
 local B, L, C = unpack(ecf)
 
 local _G = _G
 -- Lua
-local format, pairs, print, next, select, tconcat, tonumber, type = format, pairs, print, next, select, table.concat, tonumber, type
+local floor, format, min, pairs, print, next, select, tconcat, tonumber, type = math.floor, format, math.min, pairs, print, next, select, table.concat, tonumber, type
 -- WoW
-local GetCurrencyLink, GetItemInfo, ITEMS = C_CurrencyInfo.GetCurrencyLink, GetItemInfo, ITEMS
+local GetCurrencyLink, GetItemInfo, GetTime, ITEMS = C_CurrencyInfo.GetCurrencyLink, GetItemInfo, GetTime, ITEMS
 
 --Default Options
 local defaults = {
@@ -313,12 +313,41 @@ options.args.blackListTab = {
 			hidden = adv,
 		},
 		lesserToggle = {
-			type = "toggle",
-			name = L["LesserBlackWord"],
-			desc = L["LesserBlackWordTooltip"],
-			order = 13,
-			hidden = adv,
-		},
+		type = "toggle",
+		name = L["LesserBlackWord"],
+		desc = L["LesserBlackWordTooltip"],
+		order = 13,
+		hidden = adv,
+	},
+	line1_5 = {
+		type = "header",
+		name = L["BatchAdd"],
+		order = 15,
+	},
+	batchAdd = {
+		type = "input",
+		name = L["BatchAddTitle"],
+		desc = L["BatchAddDesc"],
+		order = 16,
+		get = nil,
+		set = function(_,value)
+			if value == "" then return end
+			local count = 0
+			-- 按英文逗号分割
+			for word in value:gmatch("([^,]+)") do
+				-- 去除首尾空格
+				word = word:match("^%s*(.-)%s*$")
+				if word ~= "" then
+					AddBlackWord(word, C.UI.regexToggle, C.UI.lesserToggle)
+					count = count + 1
+				end
+			end
+			if count > 0 then
+				print(format(L["BatchAddSuccess"], count))
+			end
+		end,
+		width = "full",
+	},
 		line2 = {
 			type = "header",
 			name = OPTIONS,
@@ -360,17 +389,6 @@ options.args.blackListTab = {
 			type = "input",
 			name = "",
 			order = 31,
-			set = function(_,value)
-				local wordString, HashString = value:match("([^@]*)@([^@]+)")
-				if tonumber(HashString) ~= StringHash(wordString) then
-					print(L["StringHashMismatch"])
-				else
-					for newWord, r, l in wordString:gmatch("([^;,]+),(r?),(l?)") do
-						AddBlackWord(newWord, r == "r", l == "l")
-					end
-				end
-				C.UI.stringIO = ""
-			end,
 			width = "full",
 		},
 		export = {
@@ -384,6 +402,28 @@ options.args.blackListTab = {
 				end
 				local blackString = tconcat(blackStringList,";")
 				C.UI.stringIO = blackString.."@"..StringHash(blackString)
+			end,
+		},
+		import = {
+			type = "execute",
+			name = L["Import"],
+			order = 33,
+			func = function()
+				local value = C.UI.stringIO
+				if value == "" then
+					print(L["EmptyString"])
+					return
+				end
+				local wordString, HashString = value:match("([^@]*)@([^@]+)")
+				if tonumber(HashString) ~= StringHash(wordString) then
+					print(L["StringHashMismatch"])
+				else
+					for newWord, r, l in wordString:gmatch("([^;,]+),(r?),(l?)") do
+						AddBlackWord(newWord, r == "r", l == "l")
+					end
+					print(L["ImportSuccess"])
+				end
+				C.UI.stringIO = ""
 			end,
 		},
 	},
@@ -479,6 +519,101 @@ options.args.lootFilter = {
 			desc = L["LootQualityFilterTooltips"],
 			order = 51,
 			values = colorT,
+		},
+	},
+}
+options.args.blockedContent = {
+	type = "group",
+	name = L["BlockedContent"],
+	order = 13,
+	args = {
+		description = {
+			type = "description",
+			name = L["BlockedContentDesc"],
+			order = 1,
+		},
+		refresh = {
+			type = "execute",
+			name = L["Refresh"],
+			order = 2,
+			func = function()
+				-- Force refresh UI
+				LibStub("AceConfigRegistry-3.0"):NotifyChange(addonName)
+			end,
+		},
+		clear = {
+			type = "execute",
+			name = L["ClearHistory"],
+			order = 3,
+			func = function()
+				-- Clear history
+				local history = C.blockedHistory
+				for i = #history, 1, -1 do
+					history[i] = nil
+				end
+				LibStub("AceConfigRegistry-3.0"):NotifyChange(addonName)
+			end,
+			confirm = true,
+			confirmText = L["ConfirmClearHistory"],
+		},
+		line1 = {
+			type = "header",
+			name = L["RecentBlocked"],
+			order = 10,
+		},
+		blockedList = {
+			type = "description",
+			name = function()
+				local history = C.blockedHistory or {}
+				if #history == 0 then
+					return L["NoBlockedMessages"]
+				end
+				
+				local lines = {}
+				local currentTime = GetTime()
+				for i = 1, min(50, #history) do
+					local entry = history[i]
+					local timeAgo = currentTime - entry.time
+					local timeStr
+					if timeAgo < 60 then
+						timeStr = format(L["SecondsAgo"], floor(timeAgo))
+					elseif timeAgo < 3600 then
+						timeStr = format(L["MinutesAgo"], floor(timeAgo/60))
+					else
+						timeStr = format(L["HoursAgo"], floor(timeAgo/3600))
+					end
+					
+					-- Truncate long messages
+					local displayMsg = entry.msg
+					-- Remove color codes and links to avoid display issues
+					displayMsg = displayMsg:gsub("|H.-|h(.-)|h", "%1")
+					displayMsg = displayMsg:gsub("|c%x%x%x%x%x%x%x%x", "")
+					displayMsg = displayMsg:gsub("|r", "")
+					displayMsg = displayMsg:gsub("|A.-|a", "")
+					-- Safe UTF-8 truncate
+					if #displayMsg > 100 then
+						local len = 0
+						local lastPos = 1
+						for pos = 1, #displayMsg do
+							local byte = displayMsg:byte(pos)
+							-- Check if this is the start of a UTF-8 character
+							if byte < 128 or byte >= 192 then
+								len = len + 1
+								if len <= 100 then
+									lastPos = pos
+								end
+							end
+							if len > 100 then break end
+						end
+						displayMsg = displayMsg:sub(1, lastPos) .. "..."
+					end
+					
+					lines[#lines+1] = format("|cffaaaaaa[%s]|r|cffff9900%s|r |cff00ff00%s|r: %s", timeStr, entry.reason or "[未知]", entry.player, displayMsg)
+				end
+				return tconcat(lines, "\n")
+			end,
+			order = 11,
+			fontSize = "medium",
 		},
 	},
 }

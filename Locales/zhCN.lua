@@ -50,6 +50,10 @@ L["Regex"] = "正则"
 L["RegexTooltip"] = "标记添加的关键词为正则表达式，仅对该次添加的关键词有效"
 L["LesserBlackWord"] = "次级关键词"
 L["LesserBlackWordTooltip"] = "标记添加的关键词为次级关键词，仅对该次添加的关键词有效|n当一个信息匹配多个次级关键词时才会被屏蔽。|n|n你应该只在添加那些日常交流会用到，但你希望屏蔽的对方会大量同时使用的词汇时勾选。|n下列情况不建议勾选：各种利用异体字/同音字防屏蔽的词汇、单个汉字。"
+L["BatchAdd"] = "批量添加"
+L["BatchAddTitle"] = "批量添加关键词"
+L["BatchAddDesc"] = "输入多个关键词,用英文逗号分隔。例如: WTS,代练,金币"
+L["BatchAddSuccess"] = "成功添加 %d 个关键词!"
 L["AutoCleanupKeywords"] = "自动清理关键词"
 L["AutoCleanupKeywordsTooltip"] = "关键词列表过长时，自动清理长时间未触发过的关键词|n对次级关键词无效"
 L["LesserBlackwordList"] = "次级黑名单关键词"
@@ -59,6 +63,9 @@ L["BlackList"] = "关键词列表"
 L["StringIO"] = "字符串导入导出"
 L["StringHashMismatch"] = "字符串校验错误"
 L["Export"] = "导出"
+L["Import"] = "导入"
+L["EmptyString"] = "请先在输入框中粘贴导出的字符串"
+L["ImportSuccess"] = "导入成功！"
 
 --LootFilter
 L["LootFilter"] = "拾取过滤"
@@ -73,3 +80,16 @@ L["LootQualityFilterTooltips"] = "显示拾取物品所需要的最低质量，�
 --AchievementFilter
 L["GotAchievement"] = "[%s]获得了成就%s！"
 L["And"] = "、"
+
+--BlockedContent
+L["BlockedContent"] = "被屏蔽内容"
+L["BlockedContentDesc"] = "显示最近被过滤器屏蔽的消息(最多500条)"
+L["Refresh"] = "刷新"
+L["ClearHistory"] = "清空历史"
+L["ConfirmClearHistory"] = "确定要清空被屏蔽消息的历史记录吗?"
+L["RecentBlocked"] = "最近被屏蔽的消息"
+L["NoBlockedMessages"] = "暂无被屏蔽的消息"
+L["SecondsAgo"] = "%d秒前"
+L["MinutesAgo"] = "%d分钟前"
+L["HoursAgo"] = "%d小时前"
+

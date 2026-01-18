@@ -84,6 +84,10 @@ setmetatable(blockedPlayers, {__index=function() return 0 end})
 setmetatable(blockedMsgs, {__index=function() return 0 end})
 local initTime
 
+-- Blocked message history for UI display
+local blockedHistory = {}
+local MAX_BLOCKED_HISTORY = 500
+
 -- Load DB
 -- Blocked players data is stored per server. So we wont wipe other servers data.
 local function LoadBlockedPlayers()
@@ -168,43 +172,53 @@ local function ECFfilter(Event,msg,player,flags,IsMyFriend,good)
 	-- Filter strings that has too much symbols
 	-- Filter journal link and club link
 	if db.enableAggressive and Event <= 3 and not good then
-		if (blockedPlayers[player] >= 3 or blockedMsgs[msgLine] >= 3)
-		or (annoying >= 0.25 and oriLen >= 30)
-		or (msg:find("|Hjournal") or msg:find("|HclubTicket")) then return msgLine end
+		if blockedPlayers[player] >= 3 then
+			return msgLine, "[屏蔽玩家]"
+		elseif blockedMsgs[msgLine] >= 3 then
+			return msgLine, "[重复消息]"
+		elseif annoying >= 0.25 and oriLen >= 30 then
+			return msgLine, "[符号过多]"
+		elseif msg:find("|Hjournal") or msg:find("|HclubTicket") then
+			return msgLine, "[日志/社区链接]"
+		end
 	end
 
 	-- DND and auto-reply
-	if db.enableDND and ((Event <= 3 and flags == "DND") or Event == 5) and not IsMyFriend then return msgLine end
+	if db.enableDND and ((Event <= 3 and flags == "DND") or Event == 5) and not IsMyFriend then return msgLine, "[忙碌/自动回复]" end
 
 	-- blackWord Filter
 	if Event <= (db.blackWordFilterGroup and 4 or 3) and not IsMyFriend then
 		local count = 0
+		local lesserKeywords = {}
 		for k,v in pairs(db.blackWordList) do
 			if (v.regex and filterString or msgLine):find(k) then
 				if v.lesser then
 					count = count + 1
+					lesserKeywords[#lesserKeywords+1] = k
 				else
 					if C.shouldEnableKeywordCleanup then
 						v.count = (v.count or 0) + 1
 						db.totalBlackWordsFiltered = db.totalBlackWordsFiltered + 1
 					end
-					return msgLine
+					return msgLine, "[关键字:"..k.."]"
 				end
 			end
 		end
-		if count >= db.lesserBlackWordThreshold then return msgLine end
+		if count >= db.lesserBlackWordThreshold then
+			return msgLine, "[次级:"..table.concat(lesserKeywords, ",").."]"
+		end
 	end
 
 	-- raidAlert
 	if db.addonRAF and (Event <= 2 or Event == 4) then
 		for _,tag in ipairs(RaidAlertTagList) do
-			if msg:find(tag) then return msgLine end
+			if msg:find(tag) then return msgLine, "[团队警报]" end
 		end
 	end
 	-- questReport and partyAnnounce
 	if db.addonQRF and (Event <= 2 or Event == 4) then
 		for _,tag in ipairs(QuestReportTagList) do
-			if msg:find(tag) then return msgLine end
+			if msg:find(tag) then return msgLine, "[任务组队]" end
 		end
 	end
 
@@ -222,7 +236,7 @@ local function ECFfilter(Event,msg,player,flags,IsMyFriend,good)
 			-- if multiple msgs in 0.6s, filter it (channel & emote only)
 			if line[1] == msgtable[1] and ((Event == 3 and msgtable[3] - line[3] < 0.6) or strDiff(line[2],msgtable[2]) <= 0.1) then
 				tremove(chatLines, i)
-				return msgLine
+				return msgLine, "[重复过滤]"
 			end
 		end
 		if chatLinesSize >= 30 then tremove(chatLines, 1) end
@@ -238,6 +252,7 @@ local function PreECFfilter(self,event,msg,player,language,_,_,flags,_,_,_,_,lin
 		-- filter unknown languages
 		if not availableLanguages[language] and C.db.enableLanguage then
 			filterResult = true
+			filterReason = "[其他语言]"
 			return true
 		end
 
@@ -247,12 +262,25 @@ local function PreECFfilter(self,event,msg,player,language,_,_,flags,_,_,_,_,lin
 			IsMyFriend = C_BattleNet_GetGameAccountInfoByGUID(guid) or C_FriendList_IsFriend(guid)
 			good = IsMyFriend or IsGuildMember(guid) or IsGUIDInGroup(guid)
 		end
-		local result = ECFfilter(chatEvents[event],msg,player,flags,IsMyFriend,good)
+		local result, reason = ECFfilter(chatEvents[event],msg,player,flags,IsMyFriend,good)
 		filterResult = result
+		filterReason = reason or "[未知原因]"
 
 		if result and not good then
 			blockedPlayers[player] = blockedPlayers[player] + 1
 			blockedMsgs[result] = blockedMsgs[result] + 1
+			
+			-- Record to history for UI display
+			table.insert(blockedHistory, 1, {
+				time = GetTime(),
+				player = player,
+				msg = msg,
+				event = event,
+				reason = reason or "[未知原因]",
+			})
+			if #blockedHistory > MAX_BLOCKED_HISTORY then
+				table.remove(blockedHistory)
+			end
 		end
 	end
 	return filterResult
@@ -395,3 +423,6 @@ B:AddInitScript(function()
 	ChatFrame_AddMessageEventFilter("CHAT_MSG_LOOT", lootItemFilter)
 	ChatFrame_AddMessageEventFilter("CHAT_MSG_CURRENCY", lootCurrecyFilter)
 end)
+
+-- Export blocked history for config UI
+C.blockedHistory = blockedHistory
