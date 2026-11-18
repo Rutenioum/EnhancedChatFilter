@@ -107,5 +107,23 @@ test('logout retains filter history',function() local c,_,chat,env,_,_,fire=setu
 test('all chat paths pass secret text',function() local _,_,chat=setup(); for _,e in ipairs({'CHAT_MSG_MONSTER_SAY','CHAT_MSG_SYSTEM','CHAT_MSG_ACHIEVEMENT','CHAT_MSG_LOOT','CHAT_MSG_CURRENCY'}) do assert(not chat(e,{secret=true},1)) end end)
 test('secret sender and GUID pass',function() local c,_,chat=setup(); c.db.blackWordList.SPAM={}; assert(not chat('CHAT_MSG_CHANNEL','spam',1,nil,{secret=true})); assert(not chat('CHAT_MSG_CHANNEL','spam',2,{secret=true})); assert(#c.blockedHistory==0) end)
 test('guild achievement takes priority and duplicates merge',function() local _,_,chat,_,timers,out=setup(); local msg='|Hachievement:123|h[ach]|h'; chat('CHAT_MSG_ACHIEVEMENT',msg,1); chat('CHAT_MSG_GUILD_ACHIEVEMENT',msg,2); chat('CHAT_MSG_GUILD_ACHIEVEMENT',msg,2); assert(#timers==1); timers[1](); assert(#out==1) end)
+test('history strips named epic color',function()
+ local c,o=setup()
+ c.blockedHistory[1]={msg='before |cnIQ4:|Hitem:123|h[Weapon]|h|r after',player='Other',time=99}
+ local text=o.args.blockedContent.args.blockedList.name()
+ assert(text:match(': (.*)$')=='before [Weapon] after')
+end)
+test('history strips mixed nested colors',function()
+ local c,o=setup()
+ c.blockedHistory[1]={msg='|cffa335ee紫色|r |cnWHITE_FONT_COLOR:外层|cnIQ4:武器|r正文|r',player='Other',time=99}
+ local text=o.args.blockedContent.args.blockedList.name()
+ assert(text:match(': (.*)$')=='紫色 外层武器正文')
+end)
+test('history truncates visible Chinese after color cleanup',function()
+ local c,o=setup()
+ c.blockedHistory[1]={msg=string.rep('中',98)..'|cnIQ4:|Hitem:123|h紫剑|h|r后续',player='Other',time=99}
+ local text=o.args.blockedContent.args.blockedList.name()
+ assert(text:match(': (.*)$')==string.rep('中',98)..'紫剑...')
+end)
 print(string.format('%d/%d passed',total-failures,total))
 assert(failures==0,'regression failures')

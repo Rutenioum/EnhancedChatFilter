@@ -593,6 +593,7 @@ options.args.blockedContent = {
 					-- Remove color codes and links to avoid display issues
 					displayMsg = displayMsg:gsub("|H.-|h(.-)|h", "%1")
 					displayMsg = displayMsg:gsub("|c%x%x%x%x%x%x%x%x", "")
+					displayMsg = displayMsg:gsub("|cn[%w_]+:", "")
 					displayMsg = displayMsg:gsub("|r", "")
 					displayMsg = displayMsg:gsub("|A.-|a", "")
 					-- Safe UTF-8 truncate
