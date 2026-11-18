@@ -614,7 +614,9 @@ options.args.blockedContent = {
 						if len > 100 then displayMsg = displayMsg:sub(1, lastPos) .. "..." end
 					end
 					
-					lines[#lines+1] = format("|cffaaaaaa[%s]|r|cffff9900%s|r |cff00ff00%s|r: %s", timeStr, entry.reason or "[未知]", entry.player, displayMsg)
+					local classColor = entry.class and RAID_CLASS_COLORS[entry.class]
+					local color = classColor and classColor.colorStr or "ffffffff"
+					lines[#lines+1] = format("|cffaaaaaa[%s]|r|cffff9900%s|r |c%s%s|r: %s", timeStr, entry.reason or "[未知]", color, entry.player, displayMsg)
 				end
 				return tconcat(lines, "\n")
 			end,

@@ -125,5 +125,23 @@ test('history truncates visible Chinese after color cleanup',function()
  local text=o.args.blockedContent.args.blockedList.name()
  assert(text:match(': (.*)$')==string.rep('中',98)..'紫剑...')
 end)
+test('blocked player uses class color and resets before text',function()
+ local c,o,chat,env=setup(); env.RAID_CLASS_COLORS.WARRIOR.colorStr='ffc79c6e'
+ c.db.blackWordList.SPAM={}; chat('CHAT_MSG_CHANNEL','spam',1)
+ assert(o.args.blockedContent.args.blockedList.name():find('|cffc79c6eOther|r: spam',1,true))
+end)
+test('unknown class and older history use white',function()
+ local c,o,chat,env=setup(); env.missingPlayer=true
+ c.db.blackWordList.SPAM={}; chat('CHAT_MSG_CHANNEL','spam',1)
+ assert(o.args.blockedContent.args.blockedList.name():find('|cffffffffOther|r: spam',1,true))
+ c.blockedHistory[1]={msg='old',player='Other',time=99}
+ assert(o.args.blockedContent.args.blockedList.name():find('|cffffffffOther|r: old',1,true))
+end)
+test('advanced toggle reveals keyword controls',function()
+ local _,o=setup(); local b=o.args.blackListTab.args
+ for _,k in ipairs({'lesserBlackWordList','regexToggle','lesserToggle','lesserBlackWordThreshold'}) do assert(b[k].hidden()) end
+ o.set({'advancedConfig'},true)
+ for _,k in ipairs({'lesserBlackWordList','regexToggle','lesserToggle','lesserBlackWordThreshold'}) do assert(not b[k].hidden()) end
+end)
 print(string.format('%d/%d passed',total-failures,total))
 assert(failures==0,'regression failures')

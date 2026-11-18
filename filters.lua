@@ -278,9 +278,15 @@ local function PreECFfilter(self,event,msg,player,language,_,_,flags,_,_,_,_,lin
 			blockedMsgs[result] = blockedMsgs[result] + 1
 			
 			-- Record to history for UI display
+			local class
+			if guid and guid ~= "" then
+				local _, classToken = GetPlayerInfoByGUID(guid)
+				if B:IsReadable(classToken) then class = classToken end
+			end
 			table.insert(blockedHistory, 1, {
 				time = GetTime(),
 				player = player,
+				class = class,
 				msg = msg,
 				event = event,
 				reason = reason or "[未知原因]",
