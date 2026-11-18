@@ -1,9 +1,10 @@
-## Interface: 110000
+## Interface: 16001
+## AllowLoadGameType: camelot
 ## Title: EnhancedChatFilter
 ## Notes: A chat filter based on blackwords and other triggers
 ## Notes-zhCN: 基于关键词的聊天过滤插件，包含了更多过滤器
 ## Author: Rubgrsch
-## Version: 11.0.1
+## Version: 2026.11.18
 ## SavedVariables: ecfDB
 
 libs\LibStub\LibStub.lua

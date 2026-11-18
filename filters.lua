@@ -8,7 +8,7 @@ local format, ipairs, max, min, pairs, tconcat, tonumber, tremove = format, ipai
 -- WoW
 local Ambiguate, C_BattleNet_GetGameAccountInfoByGUID, C_Item_GetItemQualityByID, C_Timer_After, ChatTypeInfo, GetAchievementLink, GetPlayerInfoByGUID, GetTime, C_FriendList_IsFriend, IsGUIDInGroup, IsGuildMember, RAID_CLASS_COLORS = Ambiguate, C_BattleNet.GetGameAccountInfoByGUID, C_Item.GetItemQualityByID, C_Timer.After, ChatTypeInfo, GetAchievementLink, GetPlayerInfoByGUID, GetTime, C_FriendList.IsFriend, IsGUIDInGroup, IsGuildMember, RAID_CLASS_COLORS
 
-local playerName, playerServer = GetUnitName("player"), GetRealmName()
+local playerName, playerServer
 
 -- Some UTF-8 symbols that will be auto-changed
 local UTF8Symbols = {
@@ -104,6 +104,7 @@ end
 
 -- Save DB when logout, at least 5min session is required
 local function SaveBlockedPlayers()
+	if not initTime then return end
 	local playersDB = C.db.blockedPlayers[playerServer]
 	local msgsDB = C.db.blockedMsgs[playerServer]
 	local loginTime = GetTime() - initTime
@@ -135,6 +136,7 @@ B:AddEventScript("PLAYER_LOGOUT", SaveBlockedPlayers)
 
 -- Add reported players to blocked list
 B:AddEventScript("PLAYER_REPORT_SUBMITTED", function(_,_,guid)
+	if not B:IsReadable(guid) or not guid or guid == "" then return end
 	local _,_,_,_,_,name,server = GetPlayerInfoByGUID(guid)
 	if not name then return end -- check nil
 	if server ~= "" and server ~= playerServer then name = name.."-"..server end
@@ -164,7 +166,7 @@ local function ECFfilter(Event,msg,player,flags,IsMyFriend,good)
 	local msgLine = filterString:gsub(B.RegexCharList, ""):upper()
 	-- If it has only symbols, don't change it
 	if msgLine == "" then msgLine = msg end
-	local annoying = (oriLen - #msgLine) / oriLen
+	local annoying = oriLen > 0 and (oriLen - #msgLine) / oriLen or 0
 
 	local db = C.db
 	-- AggressiveFilter:
@@ -191,7 +193,13 @@ local function ECFfilter(Event,msg,player,flags,IsMyFriend,good)
 		local count = 0
 		local lesserKeywords = {}
 		for k,v in pairs(db.blackWordList) do
-			if (v.regex and filterString or msgLine):find(k) then
+			local valid, match = true, nil
+			if v.regex then
+				valid, match = pcall(string.find, filterString, k)
+			else
+				match = msgLine:find(k, 1, true)
+			end
+			if valid and match then
 				if v.lesser then
 					count = count + 1
 					lesserKeywords[#lesserKeywords+1] = k
@@ -243,28 +251,27 @@ local function ECFfilter(Event,msg,player,flags,IsMyFriend,good)
 	end
 end
 
-local prevLineID, filterResult = 0, false
+local prevLineID, prevEvent, filterResult
 local function PreECFfilter(self,event,msg,player,language,_,_,flags,_,_,_,_,lineID,guid)
+	if not B:IsReadable(msg, player, language, flags, lineID, guid) then return end
 	-- With multiple chat tabs one msg can trigger filters multiple times and repeatFilter will return wrong result
-	if lineID ~= prevLineID then
-		prevLineID = lineID
+	if not lineID or lineID ~= prevLineID or event ~= prevEvent then
+		prevLineID, prevEvent = lineID, event
 
 		-- filter unknown languages
 		if not availableLanguages[language] and C.db.enableLanguage then
 			filterResult = true
-			filterReason = "[其他语言]"
 			return true
 		end
 
 		player = Ambiguate(player, "none")
 		local IsMyFriend, good
-		if guid then
+		if guid and guid ~= "" then
 			IsMyFriend = C_BattleNet_GetGameAccountInfoByGUID(guid) or C_FriendList_IsFriend(guid)
 			good = IsMyFriend or IsGuildMember(guid) or IsGUIDInGroup(guid)
 		end
 		local result, reason = ECFfilter(chatEvents[event],msg,player,flags,IsMyFriend,good)
 		filterResult = result
-		filterReason = reason or "[未知原因]"
 
 		if result and not good then
 			blockedPlayers[player] = blockedPlayers[player] + 1
@@ -300,8 +307,9 @@ B:AddEventScript("QUEST_REMOVED", QuestChanged)
 
 local MSL, MSLPos, lastMSID, lastMSIDResult = {}, 1, nil, false
 local function MonsterFilter(self,_,msg,_,_,_,_,_,_,_,_,_,lineID)
+	if not B:IsReadable(msg, lineID) then return end
 	if not C.db.enableMSF or MSFOffQuestFlag then return end
-	if lineID ~= lastMSID then -- for multi chat tabs, check only once
+	if not lineID or lineID ~= lastMSID then -- for multi chat tabs, check only once
 		lastMSID = lineID
 
 		for _, v in ipairs(MSL) do
@@ -322,21 +330,24 @@ end
 local SystemFilterTag = {
 	-- !!! Always add parentheses since gsub() has two return values !!! (xxx:gsub())
 }
-if UnitLevel("player") == GetMaxPlayerLevel() then -- spell learn, only when max level
-	local SSFilterStrings = {
-		(ERR_LEARN_ABILITY_S:gsub("%%s","(.*)")),
-		(ERR_LEARN_SPELL_S:gsub("%%s","(.*)")),
-		(ERR_SPELL_UNLEARNED_S:gsub("%%s","(.*)")),
-		(ERR_LEARN_PASSIVE_S:gsub("%%s","(.*)")),
-		(ERR_PET_SPELL_UNLEARNED_S:gsub("%%s","(.*)")),
-		(ERR_PET_LEARN_ABILITY_S:gsub("%%s","(.*)")),
-		(ERR_PET_LEARN_SPELL_S:gsub("%%s","(.*)")),
-	}
-	local i = #SystemFilterTag
-	for j, s in ipairs(SSFilterStrings) do SystemFilterTag[i+j] = s end
-end
+B:AddInitScript(function()
+	if UnitLevel("player") == GetMaxPlayerLevel() then -- spell learn, only when max level
+		local SSFilterStrings = {
+			(ERR_LEARN_ABILITY_S:gsub("%%s","(.*)")),
+			(ERR_LEARN_SPELL_S:gsub("%%s","(.*)")),
+			(ERR_SPELL_UNLEARNED_S:gsub("%%s","(.*)")),
+			(ERR_LEARN_PASSIVE_S:gsub("%%s","(.*)")),
+			(ERR_PET_SPELL_UNLEARNED_S:gsub("%%s","(.*)")),
+			(ERR_PET_LEARN_ABILITY_S:gsub("%%s","(.*)")),
+			(ERR_PET_LEARN_SPELL_S:gsub("%%s","(.*)")),
+		}
+		local i = #SystemFilterTag
+		for j, s in ipairs(SSFilterStrings) do SystemFilterTag[i+j] = s end
+	end
+end)
 
 local function SystemMsgFilter(self,_,msg)
+	if not B:IsReadable(msg) then return end
 	for _, s in ipairs(SystemFilterTag) do if msg:find(s) then return true end end
 end
 
@@ -345,16 +356,19 @@ local achievements, achievementIdx = {}, {}
 local function AchievementReady()
 	local id = achievementIdx[1]
 	local area, guild = {}, {}
-	for guid,event in pairs(achievements[id]) do
+	for guid,entry in pairs(achievements[id]) do
+		local event = entry.event
 		local _,class,_,_,_,name,server = GetPlayerInfoByGUID(guid)
-		if name then
-			if server ~= "" and server ~= playerServer then name = name.."-"..server end
+		if B:IsReadable(name, server, class) and name and class and RAID_CLASS_COLORS[class] then
+			if server and server ~= "" and server ~= playerServer then name = name.."-"..server end
 			local s = format("|c%s|Hplayer:%s|h%s|h|r", RAID_CLASS_COLORS[class].colorStr, name, name)
 			if event == "CHAT_MSG_ACHIEVEMENT" then
 				area[#area+1] = s
 			else
 				guild[#guild+1] = s
 			end
+		else
+			SendMessage(event, entry.msg)
 		end
 	end
 	if #area > 0 then SendMessage("CHAT_MSG_ACHIEVEMENT", format(L["GotAchievement"], tconcat(area, L["And"]), GetAchievementLink(id))) end
@@ -364,6 +378,7 @@ local function AchievementReady()
 end
 
 local function AchievementFilter(self, event, msg, _, _, _, _, _, _, _, _, _, _, guid)
+	if not B:IsReadable(msg, guid) then return end
 	if not C.db.enableCFA or not guid or not guid:find("Player") then return end
 	local id = tonumber(msg:match("|Hachievement:(%d+)"))
 	if not id then return end
@@ -373,25 +388,31 @@ local function AchievementFilter(self, event, msg, _, _, _, _, _, _, _, _, _, _,
 		C_Timer_After(0.5, AchievementReady)
 	end
 	local stat = achievements[id][guid]
-	if not stat or (stat == "CHAT_MSG_ACHIEVEMENT" and event == "CHAT_MSG_GUILD_ACHIEVEMENT") then achievements[id][guid] = event end
+	if not stat or (stat.event == "CHAT_MSG_ACHIEVEMENT" and event == "CHAT_MSG_GUILD_ACHIEVEMENT") then
+		achievements[id][guid] = {event = event, msg = msg}
+	end
 	return true
 end
 
 -- Loot Filter
 local function lootItemFilter(self,_,msg)
+	if not B:IsReadable(msg) then return end
 	local itemID = tonumber(msg:match("|Hitem:(%d+)"))
 	if not itemID then return end -- pet cages don't have 'item'
 	if C.db.lootItemFilterList[itemID] then return true end
-	if C_Item_GetItemQualityByID(itemID) < C.db.lootQualityMin then return true end
+	local quality = C_Item_GetItemQualityByID(itemID)
+	if quality and quality < C.db.lootQualityMin then return true end
 end
 
 local function lootCurrecyFilter(self,_,msg)
+	if not B:IsReadable(msg) then return end
 	local currencyID = tonumber(msg:match("|Hcurrency:(%d+)"))
 	if C.db.lootCurrencyFilterList[currencyID] then return true end
 end
 
 -- Invite blocker
 B:AddEventScript("PARTY_INVITE_REQUEST", function(self, _, _, _, _, _, _, _, guid)
+	if not C.db or not B:IsReadable(guid) or not guid or guid == "" then return end
 	if C.db.enableInvite and not (C_BattleNet_GetGameAccountInfoByGUID(guid) or C_FriendList_IsFriend(guid) or IsGuildMember(guid)) then
 		DeclineGroup()
 		StaticPopup_Hide("PARTY_INVITE")
@@ -399,9 +420,9 @@ B:AddEventScript("PARTY_INVITE_REQUEST", function(self, _, _, _, _, _, _, _, gui
 end)
 
 B:AddEventScript("GROUP_INVITE_CONFIRMATION", function()
-	if not C.db.enableInvite then return end
+	if not C.db or not C.db.enableInvite then return end
 	local guid = GetNextPendingInviteConfirmation()
-	if guid and not (C_BattleNet_GetGameAccountInfoByGUID(guid) or C_FriendList_IsFriend(guid) or IsGuildMember(guid)) then
+	if B:IsReadable(guid) and guid and guid ~= "" and not (C_BattleNet_GetGameAccountInfoByGUID(guid) or C_FriendList_IsFriend(guid) or IsGuildMember(guid)) then
 		RespondToInviteConfirmation(guid, false)
 		StaticPopup_Hide("GROUP_INVITE_CONFIRMATION")
 	end
@@ -409,11 +430,13 @@ end)
 
 -- init
 B:AddInitScript(function()
+	playerName, playerServer = GetUnitName("player"), GetRealmName()
 	LoadBlockedPlayers()
 	for i=1, GetNumLanguages() do availableLanguages[GetLanguageByIndex(i)] = true end
 	-- Disable community invite
-	SetCVar("showToastClubInvitation", C.db.enableCommunity and 0 or 1)
+	B:ApplyCommunitySetting(C.db.enableCommunity)
 	-- In case db is not ready
+	local ChatFrame_AddMessageEventFilter = ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter or _G.ChatFrame_AddMessageEventFilter
 	for event in pairs(chatEvents) do ChatFrame_AddMessageEventFilter(event, PreECFfilter) end
 	ChatFrame_AddMessageEventFilter("CHAT_MSG_MONSTER_SAY", MonsterFilter)
 	ChatFrame_AddMessageEventFilter("CHAT_MSG_MONSTER_EMOTE", MonsterFilter)

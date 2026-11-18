@@ -1,4 +1,4 @@
-﻿-- ECF
+-- ECF
 local addonName, ecf = ...
 local B, L, C = unpack(ecf)
 
@@ -6,7 +6,7 @@ local _G = _G
 -- Lua
 local floor, format, min, pairs, print, next, select, tconcat, tonumber, type = math.floor, format, math.min, pairs, print, next, select, table.concat, tonumber, type
 -- WoW
-local GetCurrencyLink, GetItemInfo, GetTime, ITEMS = C_CurrencyInfo.GetCurrencyLink, GetItemInfo, GetTime, ITEMS
+local GetCurrencyLink, GetItemInfo, GetTime, ITEMS = C_CurrencyInfo.GetCurrencyLink, C_Item.GetItemInfo or GetItemInfo, GetTime, ITEMS
 
 --Default Options
 local defaults = {
@@ -63,7 +63,7 @@ B:AddEventScript("GET_ITEM_INFO_RECEIVED",function(self,_,id)
 			print(format(L["NotExists"],ITEMS,id))
 		end
 	elseif v == 1 then -- change true to link
-		C.db.lootItemFilterList[id] = link
+		if link then C.db.lootItemFilterList[id] = link end
 	end
 	ItemInfoRequested[id] = nil
 end)
@@ -120,7 +120,7 @@ for i=0, 4 do
 end
 
 local function AddBlackWord(word, r, l)
-	if CheckBlacklist(word, r) then
+	if CheckBlacklist(word, r) or (r and not pcall(string.find, "", word)) then
 		print(format(L["IncludeAutofilteredWord"],word))
 	else
 		local tbl = {}
@@ -136,7 +136,12 @@ local options = {
 	type = "group",
 	name = addonName.." "..C_AddOns.GetAddOnMetadata(addonName, "Version"),
 	get = function(info) return (C.db[info[#info]] ~= nil and C.db or C.UI)[info[#info]] end,
-	set = function(info, value) (C.db[info[#info]] ~= nil and C.db or C.UI)[info[#info]] = value end,
+	set = function(info, value)
+		local key = info[#info]
+		local target = C.db[key] ~= nil and C.db or C.UI
+		target[key] = value
+		if key == "enableCommunity" then B:ApplyCommunitySetting(value) end
+	end,
 	childGroups = "tab",
 	args = {},
 }
@@ -414,8 +419,8 @@ options.args.blackListTab = {
 					print(L["EmptyString"])
 					return
 				end
-				local wordString, HashString = value:match("([^@]*)@([^@]+)")
-				if tonumber(HashString) ~= StringHash(wordString) then
+				local wordString, HashString = value:match("^([^@]*)@([^@]+)$")
+				if not wordString or tonumber(HashString) ~= StringHash(wordString) then
 					print(L["StringHashMismatch"])
 				else
 					for newWord, r, l in wordString:gmatch("([^;,]+),(r?),(l?)") do
@@ -599,13 +604,13 @@ options.args.blockedContent = {
 							-- Check if this is the start of a UTF-8 character
 							if byte < 128 or byte >= 192 then
 								len = len + 1
-								if len <= 100 then
-									lastPos = pos
+								if len == 101 then
+									lastPos = pos - 1
+									break
 								end
 							end
-							if len > 100 then break end
 						end
-						displayMsg = displayMsg:sub(1, lastPos) .. "..."
+						if len > 100 then displayMsg = displayMsg:sub(1, lastPos) .. "..." end
 					end
 					
 					lines[#lines+1] = format("|cffaaaaaa[%s]|r|cffff9900%s|r |cff00ff00%s|r: %s", timeStr, entry.reason or "[未知]", entry.player, displayMsg)

@@ -6,6 +6,21 @@ ecf[3] = {} -- Config
 setmetatable(ecf[2], {__index=function(_, key) return key end})
 local B = unpack(ecf)
 
+-- Restricted chat values must be left to Blizzard's normal chat display.
+function B:IsReadable(...)
+	if not issecretvalue then return true end
+	for i = 1, select("#", ...) do
+		if issecretvalue(select(i, ...)) then return false end
+	end
+	return true
+end
+
+function B:ApplyCommunitySetting(enabled)
+	if C_CVar.GetCVar("showToastClubInvitation") ~= nil then
+		C_CVar.SetCVar("showToastClubInvitation", enabled and 0 or 1)
+	end
+end
+
 -- Lua
 local ipairs = ipairs
 
