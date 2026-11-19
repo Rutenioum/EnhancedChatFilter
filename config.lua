@@ -31,6 +31,7 @@ local defaults = {
 	advancedConfig = false, -- show advancedConfig
 	blockedPlayers = {}, -- blocked players list, [serverName] = {[guid] = times}
 	blockedMsgs = {}, -- blocked players' msgs, [serverName] = {[msg] = times}
+	minimap = {hide = false, minimapPos = 225}, -- minimap button state, managed by LibDBIcon
 }
 
 --http://www.wowwiki.com/USERAPI_StringHash
@@ -83,6 +84,14 @@ B:AddInitScript(function()
 	for k,v in pairs(defaults) do
 		if C.db[k] == nil then C.db[k] = v end
 	end
+	-- Repair a corrupted minimap table without touching any other saved setting
+	local mm = C.db.minimap
+	if type(mm) ~= "table" then
+		mm = {}
+		C.db.minimap = mm
+	end
+	if type(mm.hide) ~= "boolean" then mm.hide = defaults.minimap.hide end
+	if type(mm.minimapPos) ~= "number" then mm.minimapPos = defaults.minimap.minimapPos end
 	for id, info in pairs(C.db.lootItemFilterList) do
 		if info == true then ItemInfoRequested[id] = 1 end
 	end
@@ -156,6 +165,14 @@ options.args.General = {
 			desc = L["DisplayAdvancedConfigTooltips"],
 			order = 1,
 			confirm = adv,
+		},
+		minimapButton = {
+			type = "toggle",
+			name = L["MinimapButton"],
+			desc = L["MinimapButtonTooltip"],
+			order = 2,
+			get = function() return not C.db.minimap.hide end,
+			set = function(_, value) C:SetMinimapButtonShown(value) end,
 		},
 		line1 = {
 			type = "header",
@@ -626,4 +643,32 @@ options.args.blockedContent = {
 	},
 }
 LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable(addonName, options)
-LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName)
+C.settingsFrame, C.settingsCategoryID = LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName)
+
+--------------- Settings entry ---------------
+-- Opened by the minimap button: newer clients use the Settings API, older ones the InterfaceOptions frame.
+function C:OpenSettings()
+	if Settings and Settings.OpenToCategory and C.settingsCategoryID then
+		Settings.OpenToCategory(C.settingsCategoryID)
+		return true
+	end
+	if InterfaceOptionsFrame_OpenToCategory and C.settingsFrame then
+		-- Older clients only select the panel on the second call
+		InterfaceOptionsFrame_OpenToCategory(C.settingsFrame)
+		InterfaceOptionsFrame_OpenToCategory(C.settingsFrame)
+		return true
+	end
+	print(L["NoSettingsEntry"])
+end
+
+-- Called by the General option; the library owns button creation and positioning
+function C:SetMinimapButtonShown(shown)
+	C.db.minimap.hide = not shown
+	local dbicon = C.minimapIcon
+	if not dbicon then return end
+	if shown then
+		dbicon:Show(addonName)
+	else
+		dbicon:Hide(addonName)
+	end
+end

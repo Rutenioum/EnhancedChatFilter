@@ -6,7 +6,7 @@ local function test(name, f)
  print((ok and 'PASS ' or 'FAIL ') .. name .. (ok and '' or ': '..tostring(err)))
  if not ok then failures = failures + 1 end
 end
-local function setup(modern)
+local function setup(modern, saved, noLibs)
  local env = setmetatable({}, {__index = _G})
  env._G = env
  env.format, env.max, env.min, env.tremove = string.format, math.max, math.min, table.remove
@@ -57,9 +57,32 @@ local function setup(modern)
  env.DeclineGroup = function() env.declined = true end
  env.StaticPopup_Hide = function() end
  local options
- env.LibStub = function() return {RegisterOptionsTable=function(_,_,o) options=o end, AddToBlizOptions=function() end, NotifyChange=function() end} end
+ local dbicon = {registered = {}, shown = {}, registerCount = 0}
+ function dbicon:IsRegistered(n) return self.registered[n] ~= nil end
+ function dbicon:Register(n, obj, db)
+  self.registered[n] = {object = obj, db = db}
+  self.registerCount = self.registerCount + 1
+ end
+ function dbicon:Show(n) self.shown[n] = true end
+ function dbicon:Hide(n) self.shown[n] = false end
+ env.dbicon = dbicon
+ local ldb = {}
+ function ldb:NewDataObject(name, obj) env.broker, env.brokerName = obj, name return obj end
+ local aceConfig = {
+  RegisterOptionsTable = function(_, _, o) options = o end,
+  AddToBlizOptions = function(_, appName) return {name = appName}, appName end,
+  NotifyChange = function() end,
+ }
+ env.LibStub = function(major)
+  if noLibs and (major == 'LibDataBroker-1.1' or major == 'LibDBIcon-1.0') then return nil end
+  if major == 'LibDataBroker-1.1' then return ldb end
+  if major == 'LibDBIcon-1.0' then return dbicon end
+  return aceConfig
+ end
+ env.Settings = {OpenToCategory = function(id) env.openedCategory = id end}
+ env.ecfDB = saved
  local ns = {}
- for _,file in ipairs({'init.lua','Locales/zhCN.lua','config.lua','filters.lua'}) do
+ for _,file in ipairs({'init.lua','Locales/zhCN.lua','config.lua','minimap.lua','filters.lua'}) do
   local f = assert(io.open(file,'rb')); local src=f:read('*a'); f:close()
   local chunk = assert(loadstring((src:gsub('^\239\187\191','')), '@'..file)); setfenv(chunk,env); chunk('EnhancedChatFilter',ns)
  end
@@ -142,6 +165,71 @@ test('advanced toggle reveals keyword controls',function()
  for _,k in ipairs({'lesserBlackWordList','regexToggle','lesserToggle','lesserBlackWordThreshold'}) do assert(b[k].hidden()) end
  o.set({'advancedConfig'},true)
  for _,k in ipairs({'lesserBlackWordList','regexToggle','lesserToggle','lesserBlackWordThreshold'}) do assert(not b[k].hidden()) end
+end)
+test('legacy config gains minimap defaults', function()
+ local c = setup(false, {enableDND = false, blackWordList = {SPAM = {}}})
+ assert(type(c.db.minimap) == 'table')
+ assert(c.db.minimap.hide == false)
+ assert(c.db.minimap.minimapPos == 225)
+ assert(c.db.enableDND == false)
+ assert(c.db.blackWordList.SPAM)
+end)
+test('non-table minimap field is repaired alone', function()
+ local c = setup(false, {minimap = 'broken', enableAggressive = true, blackWordList = {ONE = {lesser = true}}})
+ assert(type(c.db.minimap) == 'table' and c.db.minimap.hide == false)
+ assert(c.db.enableAggressive == true)
+ assert(c.db.blackWordList.ONE.lesser)
+end)
+test('unknown saved fields dropped without touching filters', function()
+ local c = setup(false, {ghostField = 1, blackWordList = {SPAM = {}}, blockedPlayers = {}})
+ assert(c.db.ghostField == nil)
+ assert(c.db.blackWordList.SPAM)
+end)
+test('minimap button registers once', function()
+ local c, _, _, env = setup()
+ assert(env.dbicon.registerCount == 1)
+ assert(env.dbicon.registered.EnhancedChatFilter.db == c.db.minimap)
+ c:SetupMinimapButton()
+ c:SetupMinimapButton()
+ assert(env.dbicon.registerCount == 1)
+end)
+test('left click opens addon settings', function()
+ local _, _, _, env = setup()
+ env.broker.OnClick(env.broker, 'LeftButton')
+ assert(env.openedCategory == 'EnhancedChatFilter')
+end)
+test('non-left click does not open settings', function()
+ local _, _, _, env = setup()
+ env.broker.OnClick(env.broker, 'RightButton')
+ assert(env.openedCategory == nil)
+end)
+test('settings fallback uses interface options frame', function()
+ local _, _, _, env = setup()
+ env.Settings = nil
+ local opened
+ env.InterfaceOptionsFrame_OpenToCategory = function(frame) opened = frame end
+ env.broker.OnClick(env.broker, 'LeftButton')
+ assert(opened and opened.name == 'EnhancedChatFilter')
+end)
+test('minimap toggle hides and shows button', function()
+ local c, o, _, env = setup(); local t = o.args.General.args.minimapButton
+ assert(t.get() == true)
+ t.set(nil, false)
+ assert(c.db.minimap.hide == true and env.dbicon.shown.EnhancedChatFilter == false)
+ t.set(nil, true)
+ assert(c.db.minimap.hide == false and env.dbicon.shown.EnhancedChatFilter == true)
+end)
+test('hidden state is honoured on login', function()
+ local c, o, _, env = setup(false, {minimap = {hide = true, minimapPos = 90}})
+ assert(c.db.minimap.hide == true)
+ assert(env.dbicon.registered.EnhancedChatFilter.db.hide == true)
+ assert(o.args.General.args.minimapButton.get() == false)
+end)
+test('missing libraries skip button but keep filtering', function()
+ local c, _, chat, env = setup(false, nil, true)
+ assert(env.broker == nil)
+ c.db.blackWordList.SPAM = {}
+ assert(chat('CHAT_MSG_CHANNEL', 'spam', 1))
 end)
 print(string.format('%d/%d passed',total-failures,total))
 assert(failures==0,'regression failures')

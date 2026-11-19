@@ -1,0 +1,15 @@
+LibDataBroker-1.1
+=================
+
+Source: https://github.com/tekkub/libdatabroker-1-1
+Commit: 1a63ede0248c11aa1ee415187c1f9c9489ce3e02 (2008-07-31)
+Library minor: 4
+Author: Tekkub
+
+License: Public Domain
+
+This software has been released into the public domain by the author(s).
+You may use, modify, and distribute it freely for any purpose, commercial or
+non-commercial, with or without attribution.
+
+No changes were made to the source code.
