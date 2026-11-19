@@ -29,6 +29,7 @@ L["MinimapButtonTooltip"] = "在小地图旁显示 EnhancedChatFilter 图标，�
 L["MinimapButtonClickHint"] = "左键：打开设置"
 L["NoSettingsEntry"] = "无法打开设置界面，请手动进入 选项 → 插件 → EnhancedChatFilter"
 L["MinimapLibMissing"] = "小地图按钮所需的库缺失，已跳过按钮，聊天过滤不受影响"
+L["MinimapInitFailed"] = "EnhancedChatFilter 小地图按钮初始化失败，聊天过滤继续运行："
 L["Aggressive"] = "额外过滤器"
 L["AggressiveTooltip"] = "一些会极大提高过滤效果和|cffE2252D误伤机率|r的过滤器集合"
 L["BlockOtherLanguages"] = "其他种族语言"

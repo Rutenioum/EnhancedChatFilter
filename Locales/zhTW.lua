@@ -29,6 +29,7 @@ L["MinimapButtonTooltip"] = "在小地圖旁顯示 EnhancedChatFilter 圖示，�
 L["MinimapButtonClickHint"] = "左鍵：開啟設定"
 L["NoSettingsEntry"] = "無法開啟設定介面，請手動進入 選項 → 插件 → EnhancedChatFilter"
 L["MinimapLibMissing"] = "小地圖按鈕所需的函式庫缺失，已略過按鈕，聊天過濾不受影響"
+L["MinimapInitFailed"] = "EnhancedChatFilter 小地圖按鈕初始化失敗，聊天過濾繼續運作："
 L["Aggressive"] = "額外過濾器"
 L["AggressiveTooltip"] = "由一些會極大提高過濾效果和|cffE2252D誤傷機率|r的關鍵字合集組成的過濾器。"
 L["BlockOtherLanguages"] = "其他種族語言"

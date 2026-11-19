@@ -27,10 +27,15 @@ function C:SetupMinimapButton()
 		end,
 	})
 	if not broker then return end
+	if not dbicon:IsRegistered(addonName) then
+		dbicon:Register(addonName, broker, C.db.minimap)
+	end
 	C.minimapBroker = broker
 	C.minimapIcon = dbicon
-	if dbicon:IsRegistered(addonName) then return end
-	dbicon:Register(addonName, broker, C.db.minimap)
 end
 
-B:AddInitScript(function() C:SetupMinimapButton() end)
+B:AddInitScript(function()
+	-- Optional UI failures must not abort the following chat-filter initializers.
+	local ok, err = pcall(C.SetupMinimapButton, C)
+	if not ok then print(L["MinimapInitFailed"], tostring(err)) end
+end)

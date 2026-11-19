@@ -6,7 +6,7 @@ local function test(name, f)
  print((ok and 'PASS ' or 'FAIL ') .. name .. (ok and '' or ': '..tostring(err)))
  if not ok then failures = failures + 1 end
 end
-local function setup(modern, saved, noLibs)
+local function setup(modern, saved, noLibs, failRegistration)
  local env = setmetatable({}, {__index = _G})
  env._G = env
  env.format, env.max, env.min, env.tremove = string.format, math.max, math.min, table.remove
@@ -60,6 +60,7 @@ local function setup(modern, saved, noLibs)
  local dbicon = {registered = {}, shown = {}, registerCount = 0}
  function dbicon:IsRegistered(n) return self.registered[n] ~= nil end
  function dbicon:Register(n, obj, db)
+  if failRegistration then error('simulated minimap creation failure') end
   self.registered[n] = {object = obj, db = db}
   self.registerCount = self.registerCount + 1
  end
@@ -228,6 +229,12 @@ end)
 test('missing libraries skip button but keep filtering', function()
  local c, _, chat, env = setup(false, nil, true)
  assert(env.broker == nil)
+ c.db.blackWordList.SPAM = {}
+ assert(chat('CHAT_MSG_CHANNEL', 'spam', 1))
+end)
+test('minimap registration failure does not stop chat filtering', function()
+ local c, _, chat = setup(false, nil, false, true)
+ assert(c.minimapIcon == nil)
  c.db.blackWordList.SPAM = {}
  assert(chat('CHAT_MSG_CHANNEL', 'spam', 1))
 end)
